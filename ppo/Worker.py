@@ -13,20 +13,20 @@ class Worker:
     child: multiprocessing.connection.Connection
     process: multiprocessing.Process
 
-    def __init__(self, seed):
+    def __init__(self, player_types: list, trained_model_path: str):
         self.child, parent = multiprocessing.Pipe()
-        self.process = multiprocessing.Process(target=worker_process, args=(parent, seed))
+        self.process = multiprocessing.Process(target=worker_process, args=(parent, player_types, trained_model_path))
         self.process.start()
 
 
-def worker_process(remote: multiprocessing.connection.Connection, seed: int):
+def worker_process(remote: multiprocessing.connection.Connection, player_types: list, trained_model_path: str):
     """
     ##Worker Process
     Each worker process runs this method
     """
 
     # create game
-    game = Game()
+    game = Game(player_types=player_types, trained_model_path=trained_model_path)
 
     # wait for instructions from the connection and execute them
     while True:

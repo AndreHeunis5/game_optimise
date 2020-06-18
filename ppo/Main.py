@@ -17,7 +17,7 @@ class Main(object):
     Runs the training loop
     """
 
-    def __init__(self, device):
+    def __init__(self, device, player_types, start_from_pretrained, model_save_freq, pretrained_path=None):
         self.device = device
 
         # #### Configurations
@@ -33,7 +33,11 @@ class Main(object):
         self.lamda = 0.95
 
         # number of training steps to perform
-        self.updates = 200  # 10000
+        self.pretrained_path = pretrained_path
+        self.updates = 500
+
+        # Model save frequency
+        self.model_save_frequency = model_save_freq
 
         # number of epochs to train the model with sampled data
         self.epochs = 4
@@ -52,7 +56,8 @@ class Main(object):
         # #### Initialize
 
         # create workers
-        self.workers = [Worker(47 + i) for i in range(self.n_workers)]
+        # TODO specify what game to play
+        self.workers = [Worker(player_types=player_types, trained_model_path=pretrained_path) for i in range(self.n_workers)]
 
         # initialize tensors for observations and action masks
         self.obs = np.zeros((self.n_workers, self.state_size), dtype=np.uint8)
@@ -64,7 +69,10 @@ class Main(object):
 
         # model for sampling
         self.model = Model(state_size=self.state_size, action_size=self.action_size)
+        if start_from_pretrained:
+            self.model.load_state_dict(torch.load(pretrained_path + 'model.pt'))
         self.model.to(device)
+
         # trainer
         self.trainer = Trainer(self.model)
 
@@ -100,6 +108,12 @@ class Main(object):
 
             # write summary info to the writer, and log to the screen
             print(f"{update:4}: reward={reward_mean:.2f} length={length_mean:.3f}")
+
+            # Save a generic set of weights and a set for bots to update with
+            if update % self.model_save_frequency == 0:
+                print('Saving model')
+                torch.save(self.model.state_dict(), self.pretrained_path + 'model.pt')
+                torch.save(self.model.state_dict(), self.pretrained_path + 'model_{}.pt'.format(update))
 
         return rewards, gamelength
 

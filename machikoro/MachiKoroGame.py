@@ -34,19 +34,21 @@ For each player
 
 After 10k games the win proportions for each player taking random actions is array([0.2591, 0.2599, 0.2405, 0.2405])
 """
-
-
-
 from copy import deepcopy
 
 from machikoro.Establishment import *
 from machikoro.Player import Player
+from common.PlayerType import PlayerType
 
 verbose = False
 
+
 class MachiKoroGame:
 
-	def __init__(self):
+	def __init__(self, player_types: list, trained_model_path: str = None):
+		self.player_types = player_types
+		self.trained_model_path = trained_model_path
+
 		self.ACTION_DIM: int = int(20)
 		self.num_players = 4
 		self.PLAYER_STATE_DIM: int = 1 + 15 + 4
@@ -59,11 +61,21 @@ class MachiKoroGame:
 		self.turn_count = None
 		self.players = None
 		self.establishments_available_to_buy = None
-		self.reset_game()
+		self.reset_game(model_path=self.trained_model_path)
 
-	def reset_game(self):
+	def reset_game(self, model_path: str):
 		self.turn_count = 0
-		self.players = [Player(0), Player(1), Player(2), Player(3)]
+
+		self.players = []
+		for i, pt in enumerate(self.player_types):
+			if pt == PlayerType.AGENT_TRAINED:
+				self.players.append(Player(
+					pos=i,
+					player_type=pt,
+					action_dim=self.ACTION_DIM,
+					model_path=model_path))
+			else:
+				self.players.append(Player(pos=i, player_type=pt, action_dim=self.ACTION_DIM))
 
 		self.establishments_available_to_buy = np.array([
 			6, 6, 6, 6, 6,  # BLUE
@@ -75,7 +87,7 @@ class MachiKoroGame:
 		# the first dice roll should happen in init so that the step structure can be 1. pn decision -> 2. pn+1 rolls
 		self._resolve_dice(active_player=self.players[0])
 
-		obs = self._build_state_vector()
+		obs = self._build_state_vector(ap=self.players[0].pos)
 		action_mask = self._build_action_mask(active_player=self.players[0])
 
 		return obs, action_mask
@@ -104,40 +116,33 @@ class MachiKoroGame:
 		# First take the RL agent action
 		done = self._resolve_active_player_actions(active_player=self.players[0], action_to_take=action_to_take)
 
-		if self.players[0].coins < 0:
-			raise ValueError("coins: {}".format(self.players[0].coins))
-
 		if done:
 			if verbose: print('player 0 won')
-			return self._build_state_vector(), 1, done, False, None, self.turn_count
+			return self._build_state_vector(ap=0), 1 - self.turn_count / 50.0, done, False, None, self.turn_count
 
 		# Skip other players if agent needs a second turn
 		if not take_second_turn:
 			# Resolve random actions
 			for ap in self.players[1:]:
 				self._resolve_dice(active_player=ap)
-				random_action_mask = self._build_action_mask(active_player=ap)
-				random_action_probs = np.random.rand(self.ACTION_DIM)
-				random_action_probs[~random_action_mask] = 0
-				random_action_probs = random_action_probs / np.sum(random_action_probs)  # renormalise to sum to 1
-				random_action = np.random.choice(range(self.ACTION_DIM), p=random_action_probs)
-				done = self._resolve_active_player_actions(active_player=ap, action_to_take=random_action)
+				action_mask = self._build_action_mask(active_player=ap)
 
-				if self.players[1].coins < 0 or self.players[2].coins < 0 or self.players[3].coins < 0:
-					raise ValueError("coins: {}, {}, {}".format(
-						self.players[1].coins,
-						self.players[2].coins,
-						self.players[3].coins))
+				if ap.player_type == PlayerType.RANDOMAGENT:
+					player_action = ap.get_action(action_mask=action_mask)
+				elif ap.player_type == PlayerType.AGENT_TRAINED:
+					state = self._build_state_vector(ap=ap.pos)
+					player_action = ap.get_action(action_mask=action_mask, state=state)
+				done = self._resolve_active_player_actions(active_player=ap, action_to_take=player_action)
 
 				if done:
 					if verbose: print('player {} won'.format(ap.pos))
-					return self._build_state_vector(), -1, done, False, None, self.turn_count
+					return self._build_state_vector(ap=ap.pos), -1 - self.turn_count / 50.0, done, False, None, self.turn_count
 
 		# Last step is for the agent to roll the dice for its next turn
 		is_double_roll = self._resolve_dice(active_player=self.players[0])
 		take_second_turn = is_double_roll and not take_second_turn and self.players[0].landmarks['amusement_park']
 
-		obs = self._build_state_vector()
+		obs = self._build_state_vector(ap=0)
 		action_mask = self._build_action_mask(active_player=self.players[0])
 
 		return obs, 0, done, take_second_turn, action_mask, None
@@ -257,12 +262,19 @@ class MachiKoroGame:
 		else:
 			return False
 
-	def _build_state_vector(self) -> np.array:
+	def _build_state_vector(self, ap: int) -> np.array:
+		"""
+		State is built in player turn order starting with the active player
 
+		:param ap:
+		:return:
+		"""
 		state = np.zeros(self.num_players * self.PLAYER_STATE_DIM, dtype=np.float32)
 		ind = 0
 
-		for p in self.players:
+		player_turn_order = self.players[ap:] + self.players[:ap]
+		for p in player_turn_order:
+
 			state[ind] = p.coins
 
 			state[ind + 1] = sum(map(lambda x: x.name == 'WheatField', p.cards[IncomeType.BLUE]))
@@ -330,3 +342,39 @@ class MachiKoroGame:
 			obs[i+1:i+13] = obs[i+1:i+13] / 6.0
 			obs[i+13:i+16] = obs[i+13:i+16] / 4.0
 		return obs
+
+	def playtest_step(self, to_buy):
+		done = False
+
+		for ap in self.players:
+			is_double_roll = self._resolve_dice(active_player=ap)
+
+			state = None
+			if ap.player_type != PlayerType.RANDOMAGENT:
+				state = self._build_state_vector(ap=ap.pos)
+			action_mask = self._build_action_mask(active_player=ap)
+
+			action = ap.get_action(action_mask=action_mask, state=state, to_buy=to_buy)
+			done = self._resolve_active_player_actions(active_player=ap, action_to_take=action)
+
+			if done:
+				print('Player {} won!'.format(ap.pos))
+				return done
+
+			if is_double_roll and ap.landmarks['amusement_park']:
+
+				if ap.player_type == PlayerType.HUMAN:
+					print('Second turn from double roll')
+
+				if ap.player_type != PlayerType.RANDOMAGENT:
+					state = self._build_state_vector(ap=ap.pos)
+				action_mask = self._build_action_mask(active_player=ap)
+
+				action = ap.get_action(action_mask=action_mask, state=state, to_buy=to_buy)
+				done = self._resolve_active_player_actions(active_player=ap, action_to_take=action)
+
+				if done:
+					print('Player {} won!'.format(ap.pos))
+					return done
+
+		return done
