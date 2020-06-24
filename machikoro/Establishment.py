@@ -2,9 +2,8 @@
 from abc import ABC, abstractmethod
 import numpy as np
 
-from machikoro.IncomeType import IncomeType
-from machikoro.Icon import Icon
-from machikoro.utils import get_coins_for_icon, get_coins_from_active_player
+from machikoro.enums.IncomeType import IncomeType
+from machikoro.enums.Icon import Icon
 
 
 class Establishment(ABC):
@@ -19,6 +18,19 @@ class Establishment(ABC):
 	@abstractmethod
 	def effect(self, player, roller, players):
 		pass
+
+	def get_coins_from_active_player(self, card_owner, active_player, coins):
+		amount_to_pay = min(coins, active_player.coins)
+		active_player.coins -= amount_to_pay
+		card_owner.coins += amount_to_pay
+
+	def get_coins_for_icon(self, player, icon: Icon, amount_per_est: int):
+		count = 0
+		for card_type in player.cards.items():
+			for c in card_type:
+				if c.icon == icon:
+					count += 1
+		player.coins += count * amount_per_est
 
 
 # ------------------------------- BLUE -------------------------------
@@ -89,7 +101,7 @@ class CheeseFactory(Establishment):
 		super().__init__(name='CheeseFactory', type=IncomeType.GREEN, icon=Icon.FACTORY, cost=5, activation=[7])
 
 	def effect(self, card_owner, active_player, players):
-		get_coins_for_icon(player=active_player, icon=Icon.LIVESTOCK, amount_per_est=3)
+		self.get_coins_for_icon(player=active_player, icon=Icon.LIVESTOCK, amount_per_est=3)
 
 
 class FurnitureFactory(Establishment):
@@ -97,7 +109,7 @@ class FurnitureFactory(Establishment):
 		super().__init__(name='FurnitureFactory', type=IncomeType.GREEN, icon=Icon.FACTORY, cost=3, activation=[8])
 
 	def effect(self, card_owner, active_player, players):
-		get_coins_for_icon(player=active_player, icon=Icon.COG, amount_per_est=3)
+		self.get_coins_for_icon(player=active_player, icon=Icon.COG, amount_per_est=3)
 
 
 class FarmersMarket(Establishment):
@@ -105,9 +117,10 @@ class FarmersMarket(Establishment):
 		super().__init__(name='FarmersMarket', type=IncomeType.GREEN, icon=Icon.APPLE, cost=2, activation=[11, 12])
 
 	def effect(self, card_owner, active_player, players):
-		get_coins_for_icon(player=active_player, icon=Icon.WHEAT, amount_per_est=2)
+		self.get_coins_for_icon(player=active_player, icon=Icon.WHEAT, amount_per_est=2)
 
 # ------------------------------- RED -------------------------------
+
 
 class Cafe(Establishment):
 
@@ -118,7 +131,7 @@ class Cafe(Establishment):
 		coins_to_gain = 1
 		if card_owner.landmarks['shopping_mall']:
 			coins_to_gain = 2
-		get_coins_from_active_player(card_owner, active_player, coins_to_gain)
+		self.get_coins_from_active_player(card_owner, active_player, coins_to_gain)
 
 
 class FamilyRestaurant(Establishment):
@@ -129,7 +142,7 @@ class FamilyRestaurant(Establishment):
 		coins_to_gain = 2
 		if card_owner.landmarks['shopping_mall']:
 			coins_to_gain = 3
-		get_coins_from_active_player(card_owner, active_player, coins_to_gain)
+		self.get_coins_from_active_player(card_owner, active_player, coins_to_gain)
 
 # ------------------------------- PURPLE -------------------------------
 

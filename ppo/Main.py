@@ -17,16 +17,31 @@ class Main(object):
     Runs the training loop
     """
 
-    def __init__(self, device, player_types, start_from_pretrained, model_save_freq, pretrained_path=None):
+    def __init__(self,
+                 game: str,
+                 device,
+                 player_types: list,
+                 start_from_pretrained: bool,
+                 model_save_freq: int,
+                 pretrained_path: str = None):
+        """
+
+        :param game:                    One of ['machikoro']
+        :param device:
+        :param player_types:
+        :param start_from_pretrained:
+        :param model_save_freq:
+        :param pretrained_path:
+        """
         self.device = device
 
         # #### Configurations
 
         # Game specific config
-        num_players = 4
+        num_players = len(player_types)
         player_state_size = 20
         self.state_size: int = num_players * player_state_size
-        self.action_size: int = 20
+        self.action_size = 20
 
         # gamma and lambda for advantage calculation
         self.gamma = 0.99
@@ -56,8 +71,12 @@ class Main(object):
         # #### Initialize
 
         # create workers
-        # TODO specify what game to play
-        self.workers = [Worker(player_types=player_types, trained_model_path=pretrained_path) for i in range(self.n_workers)]
+        self.workers = [
+            Worker(
+                player_types=player_types,
+                trained_model_path=pretrained_path,
+                game_to_play=game) for i in range(self.n_workers)
+        ]
 
         # initialize tensors for observations and action masks
         self.obs = np.zeros((self.n_workers, self.state_size), dtype=np.uint8)
@@ -67,7 +86,7 @@ class Main(object):
         for i, worker in enumerate(self.workers):
             self.obs[i], self.action_mask[i] = worker.child.recv()
 
-        # model for sampling
+        # model to sample actions from
         self.model = Model(state_size=self.state_size, action_size=self.action_size)
         if start_from_pretrained:
             self.model.load_state_dict(torch.load(pretrained_path + 'model.pt'))
@@ -136,11 +155,9 @@ class Main(object):
 
         # sample `worker_steps` from each worker
         for t in range(self.worker_steps):
-            # `self.obs` keeps track of the last observation from each worker,
-            #  which is the input for the model to sample the next action
+            # store last observation from each worker
             obs[:, t] = self.obs
-            # sample actions from the old policy for each worker;
-            #  this returns arrays of size `n_workers`
+            # sample actions from the old policy for each worker. returns arrays of size `n_workers`
             pi_logits, v = self.model(torch.from_numpy(self.obs).float().to(self.device))
             pi_probs = softmax(pi_logits)
 
@@ -155,7 +172,7 @@ class Main(object):
             #  action
             a = pi.sample()
             actions[:, t] = a.cpu().data.numpy()
-            # TODO should i be using the masked policy or unmasked?. currently using masked
+            # TODO use the masked policy or unmasked?. currently using masked
             neg_log_pis[:, t] = -pi.log_prob(a).cpu().data.numpy()
 
             # run sampled actions on each worker
@@ -167,10 +184,7 @@ class Main(object):
                 # get results after executing the actions
                 self.obs[w], rewards[w, t], dones[w, t], take_second_turns[w, t], self.action_mask[w], info = worker.child.recv()
 
-                # collect episode info, which is available if an episode finished;
-                #  this includes total reward and length of the episode -
-                #  look at `Game` to see how it works.
-                # We also add a game frame to it for monitoring.
+                # Game length and reward
                 if info is not None:
                     info['obs'] = obs[w, t]
                     episode_infos.append(info)
@@ -185,7 +199,7 @@ class Main(object):
             'advantages': advantages
         }
 
-        # samples are currently in [workers, time] table, we should flatten it
+        # Flatten samples into shape convenient for training
         samples_flat = {}
         for k, v in samples.items():
             v = v.reshape(v.shape[0] * v.shape[1], *v.shape[2:])
@@ -230,7 +244,7 @@ class Main(object):
         # collect training information like losses for monitoring
         train_info = []
 
-        # higher number of epochs -> faster learning but less stability (could be solved by reducing clipping range?)
+        # higher number of epochs -> faster learning but less stability
         for _ in range(self.epochs):
             # shuffle for each epoch
             indexes = torch.randperm(self.batch_size)

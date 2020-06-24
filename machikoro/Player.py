@@ -1,5 +1,5 @@
 
-from machikoro.IncomeType import IncomeType
+from machikoro.enums.IncomeType import IncomeType
 from machikoro.Establishment import WheatField, Bakery
 from common.PlayerType import PlayerType
 from ppo.Model import Model
@@ -7,6 +7,7 @@ from ppo.Model import Model
 import numpy as np
 import torch
 from torch.distributions import Categorical
+
 softmax = torch.nn.Softmax(dim=1)
 
 if torch.cuda.is_available():
@@ -101,11 +102,11 @@ class Player:
 			unnorm[i+13:i+16] = unnorm[i+13:i+16] * 4.0
 
 		print('----HUMAN TURN----')
-		print(to_buy)
-		print(unnorm[:20])
-		print(unnorm[20:40])
-		print(unnorm[40:60])
-		print(unnorm[60:])
+		print('Available to buy: ', to_buy)
+		print('Player state: ', unnorm[:20])
+		print('Agent state: ', unnorm[20:40])
+		print('Agent state: ', unnorm[40:60])
+		print('Agent state: ', unnorm[60:])
 
 		valid = False
 		while not valid:

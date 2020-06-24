@@ -2,7 +2,7 @@
 
 ## Implementation Details
 
-This is an implementation of about 90% of the ![base game](https://machi-koro.fandom.com/wiki/List_of_cards) (see TODOs).
+This is an implementation of about 90% of the [base game](https://machi-koro.fandom.com/wiki/List_of_cards) (see TODOs).
 
 Actions that an agent can take include:
 * Do nothing

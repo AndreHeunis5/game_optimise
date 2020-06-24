@@ -4,14 +4,17 @@ from machikoro.MachiKoroGame import MachiKoroGame
 
 class Game:
 
-    def __init__(self, player_types: list, trained_model_path: str):
+    def __init__(self, player_types: list, trained_model_path: str, game_to_play: str):
         """
         ### Initialize
         """
         self.trained_model_path = trained_model_path
 
         # create environment
-        self.env = MachiKoroGame(player_types=player_types, trained_model_path=self.trained_model_path)
+        if game_to_play == "machikoro":
+            self.env = MachiKoroGame(player_types=player_types, trained_model_path=self.trained_model_path)
+        else:
+            raise ValueError('{} is not a supported game'.format(game_to_play))
 
         # keep track of the episode rewards
         self.rewards = []

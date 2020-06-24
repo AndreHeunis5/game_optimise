@@ -8,12 +8,12 @@ This means that the tool could consist of
 
 # Games
 
-See directories of individual games for details of the implementation.
+See directories of individual games for details of the implementation / findings.
 
-* **Machikoro** A city building card game
+* [Machikoro](machikoro): A city building card game
 
 # Scripts
-* **ppo.py** Used for training an agent
+* **train_agent.py** Used for training an agent
 * **playtest.py** Used to play against a trained agent
 
 

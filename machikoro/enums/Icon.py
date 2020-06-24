@@ -1,6 +1,7 @@
 
 from enum import Enum
 
+
 class Icon(Enum):
 	WHEAT = 0
 	LIVESTOCK = 1
