@@ -21,7 +21,7 @@ class Game:
 
     def step(self, step_args):
         """
-        ### Step
+
         Executes `action` and returns a tuple of (observation, reward, done, take_second_turn, action_mask).
         * observation:
         * reward:           total reward while the action was executed

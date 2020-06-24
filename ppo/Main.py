@@ -225,10 +225,7 @@ class Main(object):
             last_value = last_value * mask
             last_advantage = last_advantage * mask
 
-            # delta_t
             delta = rewards[:, t] + self.gamma * last_value - values[:, t]
-
-            # hat A_t
             last_advantage = delta + self.gamma * self.lamda * last_advantage
 
             # note that we are collecting in reverse order.

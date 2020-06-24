@@ -21,15 +21,15 @@ class Model(nn.Module):
         self.fc3 = nn.Linear(in_features=256, out_features=256)
         nn.init.orthogonal_(self.fc3.weight, np.sqrt(0.01))
 
-        # A fully connected layer to get logits for $\pi$
+        # policy output
         self.pi_logits = nn.Linear(in_features=256, out_features=action_size)
         nn.init.orthogonal_(self.pi_logits.weight, np.sqrt(0.01))
 
-        # A fully connected layer to get value function
+        # value function output
         self.value = nn.Linear(in_features=256, out_features=1)
         nn.init.orthogonal_(self.value.weight, 1)
 
-    def forward(self, obs: np.ndarray):
+    def forward(self, obs):
         h: torch.Tensor
 
         h = F.relu(self.fc1(obs))

@@ -14,10 +14,6 @@ class Trainer:
         """
         ### Initialization
         """
-
-        # model for training, $\pi_\theta$ and $V_\theta$.
-        # This model shares parameters with the sampling model so,
-        #  updating variables affect both.
         self.model = model
         self.optimizer = optim.Adam(self.model.parameters(), lr=2.5e-4)
 
@@ -29,48 +25,32 @@ class Trainer:
         :param clip_range:
         :return:
         """
-        # sampled observations are fed into the model to get $\pi_\theta(a_t|s_t)$;
-        #  we are treating observations as state
         sampled_obs = samples['obs']
 
-        # $a_t$ actions sampled from $\pi_{\theta_{OLD}}$
+        # actions / values / advantages sampled from the old policy
         sampled_action = samples['actions']
-        # $R_t$ returns sampled from $\pi_{\theta_{OLD}}$
         sampled_return = samples['values'] + samples['advantages']
 
-        # $\bar{A_t} = \frac{\hat{A_t} - \mu(\hat{A_t})}{\sigma(\hat{A_t})}$,
-        # where $\hat{A_t}$ is advantages sampled from $\pi_{\theta_{OLD}}$.
-        # Refer to sampling function in [Main class](#main) below
-        #  for the calculation of $\hat{A}_t$.
+        # z-score normalise
         sampled_normalized_advantage = Trainer._normalize(samples['advantages'])
 
-        # $-\log \pi_{\theta_{OLD}} (a_t|s_t)$ log probabilities
         sampled_neg_log_pi = samples['neg_log_pis']
-        # $\hat{V_t}$ value estimates
         sampled_value = samples['values']
-
-        # `pi_logits` and $V^{\pi_\theta}(s_t)$
-        pi_logits, value = self.model(sampled_obs.float())
 
         # #### Policy
 
-        # $-\log \pi_\theta (a_t|s_t)$
         #TODO using masking in game playing but not here?
+        pi_logits, value = self.model(sampled_obs.float())
         pi = Categorical(logits=pi_logits)
         neg_log_pi = -pi.log_prob(sampled_action)
 
-        # ratio $r_t(\theta) = \frac{\pi_\theta (a_t|s_t)}{\pi_{\theta_{OLD}} (a_t|s_t)}$;
-        # *this is different from rewards* $r_t$.
-        ratio: torch.Tensor = torch.exp(sampled_neg_log_pi - neg_log_pi)
+        # ratio of new theta / old theta
+        ratio = torch.exp(sampled_neg_log_pi - neg_log_pi)
 
-        # Using the normalized advantage
-        #  $\bar{A_t} = \frac{\hat{A_t} - \mu(\hat{A_t})}{\sigma(\hat{A_t})}$
-        #  introduces a bias to the policy gradient estimator,
-        #  but it reduces variance a lot.
-        clipped_ratio = ratio.clamp(min=1.0 - clip_range,
-                                    max=1.0 + clip_range)
-        policy_reward = torch.min(ratio * sampled_normalized_advantage,
-                                  clipped_ratio * sampled_normalized_advantage)
+        # Using the normalized advantage introduces a bias to the policy gradient estimator, but it reduces variance a
+        # lot.
+        clipped_ratio = ratio.clamp(min=1.0 - clip_range, max=1.0 + clip_range)
+        policy_reward = torch.min(ratio * sampled_normalized_advantage, clipped_ratio * sampled_normalized_advantage)
         policy_reward = policy_reward.mean()
 
         # #### Entropy Bonus
@@ -80,15 +60,12 @@ class Trainer:
 
         # #### Value
 
-        # Clipping makes sure the value function $V_\theta$ doesn't deviate
-        #  significantly from $V_{\theta_{OLD}}$.
         clipped_value = sampled_value + (value - sampled_value).clamp(min=-clip_range,
                                                                       max=clip_range)
         vf_loss = torch.max((value - sampled_return) ** 2, (clipped_value - sampled_return) ** 2)
         vf_loss = 0.5 * vf_loss.mean()
 
-        # we want to maximize $\mathcal{L}^{CLIP+VF+EB}(\theta)$
-        # so we take the negative of it as the loss
+        # Full loss function
         loss: torch.Tensor = -(policy_reward - 0.5 * vf_loss + 0.01 * entropy_bonus)
 
         # compute gradients
