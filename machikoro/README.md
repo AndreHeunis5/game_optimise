@@ -22,8 +22,8 @@ rewards over a sliding window of 100 games.
 
 As the agent learns we can swap out the random players for agents using the same policy as the agent being trained.
 
-![](images/updating_rewards.png)
-![](images/updating_turns.png)
+![](images/updating_rewards.jpeg)
+![](images/updating_turns.jpeg)
 
 In the images above, the opponents are updated every 120 steps (at 120, 240 etc). This goes well until the 240 update
 where the agent starts struggling to make any improvement.
